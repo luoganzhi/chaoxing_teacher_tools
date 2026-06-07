@@ -108,8 +108,12 @@ def script_dir() -> str:
     return os.path.dirname(os.path.abspath(__file__))
 
 
+def local_deps_python_tag() -> str:
+    return f"{sys.implementation.name}{sys.version_info.major}.{sys.version_info.minor}"
+
+
 def default_local_deps_dir() -> str:
-    return os.path.join(script_dir(), DEFAULT_LOCAL_DEPS_DIR)
+    return os.path.join(script_dir(), DEFAULT_LOCAL_DEPS_DIR, local_deps_python_tag())
 
 
 def default_requirements_file() -> str:
@@ -228,13 +232,20 @@ def command_setup(args: argparse.Namespace) -> int:
         command.append("--upgrade")
 
     print(f"python: {sys.executable}")
+    print(f"python_version: {sys.version.split()[0]}")
     print(f"requirements: {requirements}")
     print(f"target: {target_dir}")
-    result = subprocess.run(command, text=True)
+    result = subprocess.run(command, text=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
     if result.returncode != 0:
+        if result.stdout.strip():
+            print(result.stdout.strip())
+        if result.stderr.strip():
+            print("pip_error:")
+            print(result.stderr.strip())
         raise ToolError(
-            "dependency install failed. If pip is missing, create a normal Python environment "
-            "or run: python3 -m ensurepip --upgrade"
+            "dependency install failed for this Python. Use the same working Python for doctor, setup, "
+            "login, and grading commands. If pip itself is broken, repair/reinstall Python or switch to "
+            "another Python executable, then run that Python with chaoxing_portal_tool.py setup."
         )
 
     add_local_deps_to_sys_path()
@@ -253,6 +264,7 @@ def command_setup(args: argparse.Namespace) -> int:
 def command_doctor(args: argparse.Namespace) -> int:
     print(f"tool_dir: {script_dir()}")
     print(f"python: {sys.executable}")
+    print(f"python_version: {sys.version.split()[0]}")
     print(f"local_deps: {default_local_deps_dir()}")
     print(f"requirements: {default_requirements_file()}")
 

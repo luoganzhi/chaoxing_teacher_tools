@@ -7,6 +7,11 @@ Target: `https://scujcc.fanya.chaoxing.com/portal`
 Run all commands from the directory that contains `chaoxing_portal_tool.py` and
 `requirements.txt`.
 
+Use the same Python executable for the whole flow. For example, if you start
+with `python3.11 chaoxing_portal_tool.py doctor`, also use `python3.11` for
+`setup`, `login`, and grading commands. If `python3` points to a broken Python,
+switch to another working Python executable and keep using it.
+
 Check whether the local environment is ready:
 
 ```bash
@@ -19,8 +24,13 @@ If dependencies are missing, install them into the local tool directory:
 python3 chaoxing_portal_tool.py setup
 ```
 
-`setup` installs packages into `.chaoxing_deps/` next to this script. It avoids
-modifying the system Python environment.
+`setup` installs packages into a Python-version-specific directory under
+`.chaoxing_deps/` next to this script. It avoids modifying the system Python
+environment.
+
+If `setup` fails because pip cannot start, repair/reinstall that Python or use a
+different working Python executable, then rerun `doctor` and `setup` with that
+same executable.
 
 Check again:
 

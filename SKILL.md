@@ -11,6 +11,8 @@ Use `chaoxing_portal_tool.py` from the directory that contains this `SKILL.md`, 
 python3 chaoxing_portal_tool.py ...
 ```
 
+Use the same Python executable for `doctor`, `setup`, `login`, and grading commands in a given environment. If `python3` points to a broken Python, switch to another working Python such as `python3.11` and keep using that same executable.
+
 Keep the interaction conversational and beginner-friendly. Explain what the next step does in plain Chinese, but do not expose cookies, passwords, or raw credential values. Do not submit scores unless the user explicitly confirms submission after seeing the final score summary.
 
 ## First Run In Any Environment
@@ -27,7 +29,9 @@ If required Python packages are missing, run:
 python3 chaoxing_portal_tool.py setup
 ```
 
-`setup` installs packages from `requirements.txt` into the local `.chaoxing_deps/` directory next to the tool. It does not install into the system Python environment and does not require the user to understand virtual environments.
+`setup` installs packages from `requirements.txt` into a Python-version-specific directory under `.chaoxing_deps/` next to the tool. It does not install into the system Python environment and does not require the user to understand virtual environments.
+
+If `setup` fails because the Python executable's own `pip` is broken, tell the user this is an environment/Python installation problem, not a Chaoxing login problem. Use another working Python executable and rerun the same flow with that executable.
 
 After setup, run:
 

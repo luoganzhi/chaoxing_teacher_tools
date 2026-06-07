@@ -12,6 +12,7 @@ from __future__ import annotations
 import argparse
 import base64
 import getpass
+import importlib.util
 import json
 import os
 import random
@@ -35,6 +36,7 @@ MOOC2_BASE_URL = "https://mooc2-ans.chaoxing.com"
 TRANSFER_KEY = "u2oh6Vu^HWe4_AES"
 DEFAULT_GRADE_PLAN_DIR = ".chaoxing_grade_plans"
 DEFAULT_REVIEW_BUNDLE_DIR = ".chaoxing_review_bundles"
+DEFAULT_LOCAL_DEPS_DIR = ".chaoxing_deps"
 # Exam automation is intentionally hidden until its workflow is finished.
 TASK_ORDER = ("homework",)
 TASK_DEFINITIONS = {
@@ -102,6 +104,27 @@ class ToolError(RuntimeError):
     pass
 
 
+def script_dir() -> str:
+    return os.path.dirname(os.path.abspath(__file__))
+
+
+def default_local_deps_dir() -> str:
+    return os.path.join(script_dir(), DEFAULT_LOCAL_DEPS_DIR)
+
+
+def default_requirements_file() -> str:
+    return os.path.join(script_dir(), "requirements.txt")
+
+
+def add_local_deps_to_sys_path() -> None:
+    deps_dir = default_local_deps_dir()
+    if os.path.isdir(deps_dir) and deps_dir not in sys.path:
+        sys.path.insert(0, deps_dir)
+
+
+add_local_deps_to_sys_path()
+
+
 def run_browser(args: list[str], *, check: bool = True) -> subprocess.CompletedProcess[str]:
     command = ["agent-browser", *args]
     result = subprocess.run(
@@ -131,7 +154,7 @@ def ensure_agent_browser() -> None:
 
 
 def default_cookie_file() -> str:
-    return os.path.join(os.path.dirname(os.path.abspath(__file__)), ".chaoxing_cookies.json")
+    return os.path.join(script_dir(), ".chaoxing_cookies.json")
 
 
 def ensure_api_dependencies() -> None:
@@ -140,8 +163,137 @@ def ensure_api_dependencies() -> None:
         from cryptography.hazmat.primitives.ciphers import Cipher  # noqa: F401
     except ImportError as exc:
         raise ToolError(
-            "API login needs requests and cryptography. Install them with: python3 -m pip install requests cryptography"
+            "API commands need requests and cryptography. Run: "
+            "python3 chaoxing_portal_tool.py setup"
         ) from exc
+
+
+def api_dependency_report() -> list[dict[str, object]]:
+    modules = [
+        ("requests", "requests", "HTTP API requests", True),
+        (
+            "cryptography",
+            "cryptography.hazmat.primitives.ciphers",
+            "Chaoxing API password encryption",
+            True,
+        ),
+        ("pdfplumber", "pdfplumber", "PDF attachment text extraction", False),
+    ]
+    report = []
+    for module_name, import_name, purpose, required in modules:
+        spec = importlib.util.find_spec(import_name)
+        import_error = ""
+        if spec is not None:
+            try:
+                __import__(import_name)
+            except Exception as exc:
+                import_error = str(exc)
+        report.append(
+            {
+                "module": module_name,
+                "available": spec is not None and not import_error,
+                "purpose": purpose,
+                "required": required,
+                "origin": getattr(spec, "origin", "") if spec else "",
+                "error": import_error,
+            }
+        )
+    return report
+
+
+def command_setup(args: argparse.Namespace) -> int:
+    target_dir = os.path.abspath(args.target)
+    requirements = os.path.abspath(args.requirements)
+    if not os.path.exists(requirements):
+        raise ToolError(f"requirements file not found: {requirements}")
+
+    os.makedirs(target_dir, exist_ok=True)
+    command = [
+        sys.executable,
+        "-m",
+        "pip",
+        "install",
+        "-r",
+        requirements,
+        "--target",
+        target_dir,
+    ]
+    if args.upgrade:
+        command.append("--upgrade")
+
+    print(f"python: {sys.executable}")
+    print(f"requirements: {requirements}")
+    print(f"target: {target_dir}")
+    result = subprocess.run(command, text=True)
+    if result.returncode != 0:
+        raise ToolError(
+            "dependency install failed. If pip is missing, create a normal Python environment "
+            "or run: python3 -m ensurepip --upgrade"
+        )
+
+    add_local_deps_to_sys_path()
+    if target_dir not in sys.path:
+        sys.path.insert(0, target_dir)
+    importlib.invalidate_caches()
+    missing = [row["module"] for row in api_dependency_report() if not row["available"] and row["required"]]
+    if missing:
+        raise ToolError("installed dependencies, but still missing: " + ", ".join(missing))
+
+    print("setup: ok")
+    print("You can now run: python3 chaoxing_portal_tool.py doctor")
+    return 0
+
+
+def command_doctor(args: argparse.Namespace) -> int:
+    print(f"tool_dir: {script_dir()}")
+    print(f"python: {sys.executable}")
+    print(f"local_deps: {default_local_deps_dir()}")
+    print(f"requirements: {default_requirements_file()}")
+
+    problems = []
+    for row in api_dependency_report():
+        status = "ok" if row["available"] else "missing"
+        required = "required" if row["required"] else "recommended"
+        print(f"dependency:{row['module']}: {status} ({required})")
+        if row["origin"]:
+            print(f"  origin: {row['origin']}")
+        if row.get("error"):
+            print(f"  error: {row['error']}")
+        if not row["available"] and row["required"]:
+            problems.append(f"missing Python package: {row['module']}")
+        elif not row["available"]:
+            print("  note: optional; run setup if you want richer attachment extraction")
+
+    cookie_file = args.cookie_file
+    cookie_status = "present" if os.path.exists(cookie_file) else "missing"
+    print(f"cookie_file: {cookie_file}")
+    print(f"cookie_status: {cookie_status}")
+
+    agent_browser = shutil.which("agent-browser")
+    print(f"agent-browser: {agent_browser or 'missing'}")
+    if not agent_browser:
+        print("  browser commands are optional; API homework workflows do not need agent-browser")
+
+    if args.check_login:
+        try:
+            ok, message = saved_login_status(cookie_file, args.check_url, args.timeout)
+        except Exception as exc:
+            ok, message = False, str(exc)
+        print(f"login_check: {'ok' if ok else 'failed'}")
+        print(f"login_message: {message}")
+        if not ok:
+            problems.append("saved Chaoxing login is unavailable")
+
+    if problems:
+        print("doctor: needs_attention")
+        if any(problem.startswith("missing Python package") for problem in problems):
+            print("next_step: python3 chaoxing_portal_tool.py setup")
+        elif any("login" in problem for problem in problems):
+            print("next_step: python3 chaoxing_portal_tool.py login")
+        return 2
+
+    print("doctor: ok")
+    return 0
 
 
 def request_headers() -> dict[str, str]:
@@ -2736,6 +2888,37 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--url", default=PORTAL_URL, help=f"default: {PORTAL_URL}")
 
     subparsers = parser.add_subparsers(dest="command", required=True)
+
+    setup = subparsers.add_parser(
+        "setup",
+        help="install Python dependencies into a local project directory",
+    )
+    setup.add_argument(
+        "--target",
+        default=default_local_deps_dir(),
+        help=f"local dependency directory, default: {default_local_deps_dir()}",
+    )
+    setup.add_argument(
+        "--requirements",
+        default=default_requirements_file(),
+        help=f"requirements file, default: {default_requirements_file()}",
+    )
+    setup.add_argument("--upgrade", action="store_true", help="upgrade packages in the local dependency directory")
+    setup.set_defaults(func=command_setup)
+
+    doctor = subparsers.add_parser(
+        "doctor",
+        help="check dependencies, optional browser support, cookie file, and saved login",
+    )
+    add_cookie_file_argument(doctor)
+    doctor.add_argument("--check-url", default=AUTH_CHECK_URL, help=f"default: {AUTH_CHECK_URL}")
+    doctor.add_argument("--timeout", type=float, default=20.0, help="request timeout in seconds")
+    doctor.add_argument(
+        "--check-login",
+        action="store_true",
+        help="also verify that the saved cookie reaches an authenticated page",
+    )
+    doctor.set_defaults(func=command_doctor)
 
     login = subparsers.add_parser("login", help="login through Chaoxing HTTP APIs and save cookies")
     add_cookie_file_argument(login)

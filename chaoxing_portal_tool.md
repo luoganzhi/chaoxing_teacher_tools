@@ -2,6 +2,53 @@
 
 Target: `https://scujcc.fanya.chaoxing.com/portal`
 
+## Quick start for a new environment
+
+Run all commands from the directory that contains `chaoxing_portal_tool.py` and
+`requirements.txt`.
+
+Check whether the local environment is ready:
+
+```bash
+python3 chaoxing_portal_tool.py doctor
+```
+
+If dependencies are missing, install them into the local tool directory:
+
+```bash
+python3 chaoxing_portal_tool.py setup
+```
+
+`setup` installs packages into `.chaoxing_deps/` next to this script. It avoids
+modifying the system Python environment.
+
+Check again:
+
+```bash
+python3 chaoxing_portal_tool.py doctor
+```
+
+Then log in if needed:
+
+```bash
+python3 chaoxing_portal_tool.py login
+```
+
+To verify saved cookies too:
+
+```bash
+python3 chaoxing_portal_tool.py doctor --check-login
+```
+
+After login, list teacher courses:
+
+```bash
+python3 chaoxing_portal_tool.py courses
+```
+
+Browser commands are optional and require `agent-browser`. The API homework
+workflow does not require a browser window.
+
 ## API login
 
 ```bash
@@ -124,11 +171,13 @@ python3 chaoxing_portal_tool.py homework-review-bundle 人工智能原理 142468
 ```
 
 The bundle includes student answer text, answer images, downloaded student
-attachments, and extracted document text when supported. The model should
-inspect that content before suggesting scores. Suggested scores should normally
-stay at or above 70. Scores below 70 require a concrete reason such as blank
-submission, irrelevant content, missing required artifacts, or clearly invalid
-work.
+attachments, and extracted document text when supported. When `--download-assets`
+is used, answer images are saved locally and referenced by path in
+`downloaded_assets`; the model should inspect those image paths along with
+extracted text, filenames, and attachment metadata before suggesting scores.
+Suggested scores should normally stay at or above 70. Scores below 70 require a
+concrete reason such as blank submission, irrelevant content, missing required
+artifacts, or clearly invalid work.
 
 After the model has reviewed the extracted content, write a JSON score file:
 

@@ -1,52 +1,66 @@
 ---
 name: chaoxing-teacher
-description: Automate Chaoxing/Fanya teacher workflows for the SCUJCC portal with chaoxing_portal_tool.py. Use when the user says "进入超星", "超星", "查课程", "进入课程", "进入班级", "作业界面", "批改作业", "未批改作业", "给分", "提交分数", asks to save/login with cookies, or asks to grade Chaoxing homework. Supports API login, teaching-course selection, class selection, homework review bundles, content-aware scoring, score plan creation, score submission, and post-submit verification. Exam is currently disabled and should stay hidden.
+description: Automate Chaoxing/Fanya teacher workflows with chaoxing_portal_tool.py. Use this skill whenever the user mentions "超星", "学习通", "泛雅", "进入课程", "进入班级", "作业界面", "批改作业", "未批改作业", "给分", "提交分数", saving cookies, logging in, listing teacher courses, extracting homework submissions, or grading Chaoxing homework. It includes first-run setup/doctor checks, local dependency installation, API login, teaching-course and class selection, homework review bundles with images/attachments, content-aware scoring, explicit confirmation before submission, and post-submit verification. Exam workflows are disabled and should stay hidden.
 ---
 
 # Chaoxing Teacher
 
-Use the local tool in the cloned repository or skill directory:
+Use `chaoxing_portal_tool.py` from the directory that contains this `SKILL.md`, `chaoxing_portal_tool.py`, and `requirements.txt`.
 
 ```bash
 python3 chaoxing_portal_tool.py ...
 ```
 
-If `python3 chaoxing_portal_tool.py --help` fails because Python packages are missing, install the local requirements:
+Keep the interaction conversational and beginner-friendly. Explain what the next step does in plain Chinese, but do not expose cookies, passwords, or raw credential values. Do not submit scores unless the user explicitly confirms submission after seeing the final score summary.
+
+## First Run In Any Environment
+
+Start every unfamiliar environment with:
 
 ```bash
-python3 -m pip install -r requirements.txt
+python3 chaoxing_portal_tool.py doctor
 ```
 
-Keep the interaction conversational. Do not expose cookies, passwords, or raw credential values. Do not submit scores unless the user explicitly confirms submission after seeing the final score summary.
+If required Python packages are missing, run:
+
+```bash
+python3 chaoxing_portal_tool.py setup
+```
+
+`setup` installs packages from `requirements.txt` into the local `.chaoxing_deps/` directory next to the tool. It does not install into the system Python environment and does not require the user to understand virtual environments.
+
+After setup, run:
+
+```bash
+python3 chaoxing_portal_tool.py doctor
+```
+
+To also verify saved Chaoxing login cookies:
+
+```bash
+python3 chaoxing_portal_tool.py doctor --check-login
+```
+
+If login is missing or expired, run:
+
+```bash
+python3 chaoxing_portal_tool.py login
+```
+
+The `login` command prompts for account and password, saves only cookies in `.chaoxing_cookies.json`, and should not print secret values. If a network command fails because of sandbox/network restrictions, rerun that command with the required permission.
 
 ## Current Scope
 
-- Supported: API login, teaching courses, class selection, homework interface, ungraded homework discovery, submission extraction, content-aware scoring, score plan creation, score submission, post-submit verification.
+- Supported: first-run setup checks, API login, teaching courses, class selection, homework interface, ungraded homework discovery, submission extraction, content-aware scoring, score plan creation, score submission, and post-submit verification.
 - Disabled: exam workflows. If the user asks for exams, say the exam feature is currently hidden/disabled and continue with homework if relevant.
-- The tool stores cookies in `.chaoxing_cookies.json`; never print cookie values.
-- Browser opening is optional and needs `agent-browser`; API homework flows do not require opening a browser window.
+- Browser opening is optional and needs `agent-browser`; API login and homework grading flows do not require opening a browser window.
+- Runtime data stays local and should not be committed or printed: `.chaoxing_cookies.json`, `.chaoxing_review_bundles/`, `.chaoxing_grade_plans/`, and `.chaoxing_deps/`.
 
 ## Conversation State
 
 Carry forward the latest selected course, class, homework, review bundle, and grade plan in the conversation. If the user says "刚刚的班级", "第一个", or "提交分数", resolve it from the latest context instead of asking again.
 
 If the requested action is ambiguous and a safe default exists, choose the default and show the result. Ask only when the next action could submit or change data.
-
-## Login
-
-When the user says "进入超星" or needs Chaoxing access:
-
-```bash
-python3 chaoxing_portal_tool.py api-status
-```
-
-If cookies are missing or expired, run:
-
-```bash
-python3 chaoxing_portal_tool.py login
-```
-
-The login command prompts for account and password. If a network command fails from sandbox restrictions, rerun it with the required network permission.
 
 ## Course And Class Flow
 
@@ -102,7 +116,7 @@ Before generating content-aware scores, create a review bundle:
 python3 chaoxing_portal_tool.py homework-review-bundle "<course>" "<clazz>" "<work>" --download-assets --max-chars 8000 --no-auto-login
 ```
 
-Inspect `reviews[].downloaded_assets[].extracted_text`, student answer text, filenames, image paths, and attachment metadata. Identify whether each submission matches the assigned homework. For document extraction failures, look at fallback extracted text, image assets, and attachment filename/context before deciding.
+Inspect `reviews[].summary.student_answers[].text`, `reviews[].summary.answer_images`, `reviews[].downloaded_assets[].path`, `reviews[].downloaded_assets[].extracted_text`, filenames, and attachment metadata. When `--download-assets` is used, answer images are downloaded locally and referenced by path; attachments are downloaded and text is extracted when supported. Use the image paths and extracted text as grading evidence when available.
 
 Scoring policy:
 

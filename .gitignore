@@ -6,6 +6,7 @@ __pycache__/
 venv/
 env/
 .env
+.chaoxing_deps/
 
 .chaoxing_cookies.json
 .chaoxing_grade_plans/

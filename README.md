@@ -30,6 +30,34 @@ https://github.com/luoganzhi/chaoxing_teacher_tools/tree/main/chaoxing-teacher
 
 agent 会按 skill 说明自动运行环境检查、依赖安装、登录检查和作业批改流程。
 
+## Workflow Preview
+
+下面是脱敏示意图，用来说明这个 skill 会替 agent 串起哪些步骤。图片不包含真实账号、cookie、学生姓名、课程 ID、成绩或作业内容。
+
+### 1. 安装后先自检环境
+
+![安装后自检环境](assets/readme/01-install-doctor.svg)
+
+agent 首次使用时会先运行 `doctor`，检查 Python、依赖、本地 cookie、可选浏览器工具和登录状态。缺少依赖时会提示运行 `setup`，依赖会安装到本地 `.chaoxing_deps/`，不改系统环境。
+
+### 2. 选择教师课程和班级
+
+![选择教师课程和班级](assets/readme/02-course-class.svg)
+
+登录后，agent 会先列出教师课程，再根据用户选择进入课程班级。班级列表会优先标记与当前用户相关的班级，任务入口当前只显示作业，考试功能保持隐藏。
+
+### 3. 提取作业内容给 agent 参考
+
+![提取作业内容](assets/readme/03-review-bundle.svg)
+
+批改前会生成 review bundle。开启 `--download-assets` 后，学生答案里的图片和附件会下载到本地，PDF/DOCX/TXT 等附件会尽量提取文本，agent 可以结合图片路径、附件元数据和文本证据给分。
+
+### 4. 提交前确认，提交后验证
+
+![提交前确认与提交后验证](assets/readme/04-grade-confirm.svg)
+
+评分会先生成干运行计划，展示学生、分数和理由。只有用户明确说“提交分数”后才会执行 `--commit`，提交后会重新读取超星页面验证分数是否匹配。
+
 ## Why This Path
 
 这个仓库的可安装 skill 在 `chaoxing-teacher/` 子目录里。该目录包含完整运行所需文件：

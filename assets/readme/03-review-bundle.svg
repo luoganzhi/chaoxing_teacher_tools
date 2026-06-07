@@ -1,0 +1,66 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1200" height="680" viewBox="0 0 1200 680" role="img" aria-labelledby="title desc">
+  <title id="title">Homework review bundle extraction</title>
+  <desc id="desc">A sanitized diagram showing homework submissions being converted into a review bundle with text, images, attachments, and extracted document text.</desc>
+  <defs>
+    <style>
+      .bg { fill: #f4f7f7; }
+      .panel { fill: #ffffff; stroke: #cfdbdc; stroke-width: 2; }
+      .dark { fill: #293a40; }
+      .teal { fill: #2a7d78; }
+      .green { fill: #3b7f53; }
+      .orange { fill: #c7772e; }
+      .purple { fill: #6b5b95; }
+      .title { font: 36px -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; font-weight: 700; fill: #293a40; }
+      .text { font: 24px -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; fill: #293a40; }
+      .small { font: 20px -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; fill: #627276; }
+      .label { font: 18px -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; font-weight: 700; fill: #ffffff; }
+      .code { font: 19px ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; fill: #293a40; }
+    </style>
+  </defs>
+  <rect class="bg" width="1200" height="680"/>
+  <text class="title" x="60" y="70">作业内容提取：文字、图片、附件一起进 review bundle</text>
+  <text class="small" x="60" y="108">示意图只展示数据结构，不展示真实学生提交</text>
+
+  <rect class="panel" x="60" y="150" width="330" height="430" rx="16"/>
+  <rect class="dark" x="60" y="150" width="330" height="58" rx="16"/>
+  <text class="label" x="90" y="186">待批改提交</text>
+  <rect x="90" y="244" width="270" height="72" rx="10" fill="#eef3f3"/>
+  <text class="text" x="112" y="276">学生 01</text>
+  <text class="small" x="112" y="304">答案文本 + 图片 + PDF</text>
+  <rect x="90" y="336" width="270" height="72" rx="10" fill="#fff5e9"/>
+  <text class="text" x="112" y="368">学生 02</text>
+  <text class="small" x="112" y="396">DOCX 附件 + 截图</text>
+  <rect x="90" y="428" width="270" height="72" rx="10" fill="#f0eef8"/>
+  <text class="text" x="112" y="460">学生 03</text>
+  <text class="small" x="112" y="488">文本答案</text>
+
+  <rect class="panel" x="450" y="150" width="300" height="430" rx="16"/>
+  <rect class="teal" x="450" y="150" width="300" height="58" rx="16"/>
+  <text class="label" x="480" y="186">提取命令</text>
+  <rect x="480" y="246" width="240" height="182" rx="10" fill="#eef7f7" stroke="#c7dede"/>
+  <text class="code" x="500" y="286">homework-review-bundle</text>
+  <text class="code" x="500" y="324">--download-assets</text>
+  <text class="code" x="500" y="362">--max-chars 8000</text>
+  <text class="code" x="500" y="400">--no-auto-login</text>
+  <rect x="480" y="462" width="240" height="56" rx="28" class="teal"/>
+  <text class="label" x="528" y="497">生成 bundle</text>
+
+  <rect class="panel" x="810" y="150" width="330" height="430" rx="16"/>
+  <rect class="green" x="810" y="150" width="330" height="58" rx="16"/>
+  <text class="label" x="840" y="186">review_bundle.json</text>
+  <rect x="840" y="242" width="120" height="82" rx="10" class="green"/>
+  <text class="label" x="876" y="290">文本</text>
+  <rect x="990" y="242" width="120" height="82" rx="10" class="orange"/>
+  <text class="label" x="1026" y="290">图片</text>
+  <rect x="840" y="354" width="120" height="82" rx="10" class="purple"/>
+  <text class="label" x="876" y="402">PDF</text>
+  <rect x="990" y="354" width="120" height="82" rx="10" class="teal"/>
+  <text class="label" x="1026" y="402">DOCX</text>
+  <text class="small" x="840" y="498">agent 根据这些证据评分</text>
+  <text class="small" x="840" y="530">低分必须有具体内容理由</text>
+
+  <path d="M 397 365 C 420 365 425 365 440 365" fill="none" stroke="#2a7d78" stroke-width="5"/>
+  <path d="M 432 354 L 449 365 L 432 376 Z" fill="#2a7d78"/>
+  <path d="M 758 365 C 780 365 787 365 800 365" fill="none" stroke="#2a7d78" stroke-width="5"/>
+  <path d="M 792 354 L 809 365 L 792 376 Z" fill="#2a7d78"/>
+</svg>

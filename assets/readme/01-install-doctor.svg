@@ -1,0 +1,69 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1200" height="680" viewBox="0 0 1200 680" role="img" aria-labelledby="title desc">
+  <title id="title">Install and doctor workflow</title>
+  <desc id="desc">A sanitized diagram showing skill installation, doctor checks, local dependency setup, and login readiness.</desc>
+  <defs>
+    <style>
+      .bg { fill: #f6f7f4; }
+      .panel { fill: #ffffff; stroke: #d8ddd2; stroke-width: 2; }
+      .header { fill: #26332c; }
+      .green { fill: #2f7d5c; }
+      .amber { fill: #b97824; }
+      .blue { fill: #2f5f8f; }
+      .muted { fill: #5f6b63; }
+      .line { stroke: #bcc7bd; stroke-width: 3; fill: none; }
+      .arrow { stroke: #2f7d5c; stroke-width: 4; fill: none; marker-end: url(#arrow); }
+      .code { font: 22px ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; fill: #23312a; }
+      .text { font: 26px -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; fill: #26332c; }
+      .small { font: 20px -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; fill: #5f6b63; }
+      .title { font: 36px -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; font-weight: 700; fill: #26332c; }
+      .label { font: 20px -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; font-weight: 700; fill: #ffffff; }
+    </style>
+    <marker id="arrow" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+      <path d="M 0 0 L 10 5 L 0 10 z" fill="#2f7d5c"/>
+    </marker>
+  </defs>
+  <rect class="bg" width="1200" height="680"/>
+  <text class="title" x="60" y="70">安装后，agent 自动做首轮自检</text>
+  <text class="small" x="60" y="108">脱敏示意图：不包含真实账号、cookie、课程或学生数据</text>
+
+  <rect class="panel" x="60" y="150" width="320" height="390" rx="16"/>
+  <rect class="header" x="60" y="150" width="320" height="64" rx="16"/>
+  <text class="label" x="92" y="190">1. 安装 skill</text>
+  <text class="small" x="92" y="256">对 agent 说：</text>
+  <rect x="92" y="284" width="256" height="108" rx="10" fill="#eef4f0" stroke="#d8ddd2"/>
+  <text class="code" x="112" y="326">安装这个 skill:</text>
+  <text class="code" x="112" y="362">github.com/.../</text>
+  <text class="code" x="112" y="398">chaoxing-teacher</text>
+  <circle cx="118" cy="460" r="16" class="green"/>
+  <text class="small" x="146" y="467">重启 agent 后生效</text>
+
+  <rect class="panel" x="440" y="150" width="320" height="390" rx="16"/>
+  <rect class="blue" x="440" y="150" width="320" height="64" rx="16"/>
+  <text class="label" x="472" y="190">2. doctor 自检</text>
+  <text class="small" x="472" y="256">agent 自动运行：</text>
+  <rect x="472" y="284" width="256" height="142" rx="10" fill="#f2f5f8" stroke="#d2dce5"/>
+  <text class="code" x="492" y="326">$ python3 ... doctor</text>
+  <text class="code" x="492" y="362">dependency: ok</text>
+  <text class="code" x="492" y="398">cookie: missing</text>
+  <text class="code" x="492" y="434">next: login</text>
+  <circle cx="498" cy="486" r="16" class="amber"/>
+  <text class="small" x="526" y="493">缺依赖时自动提示 setup</text>
+
+  <rect class="panel" x="820" y="150" width="320" height="390" rx="16"/>
+  <rect class="green" x="820" y="150" width="320" height="64" rx="16"/>
+  <text class="label" x="852" y="190">3. 本地依赖与登录</text>
+  <text class="small" x="852" y="256">依赖安装在项目本地：</text>
+  <rect x="852" y="284" width="256" height="142" rx="10" fill="#eef7f2" stroke="#cce2d5"/>
+  <text class="code" x="872" y="326">.chaoxing_deps/</text>
+  <text class="code" x="872" y="362">cpython3.11/</text>
+  <text class="code" x="872" y="398">requests</text>
+  <text class="code" x="872" y="434">cryptography</text>
+  <circle cx="878" cy="486" r="16" class="green"/>
+  <text class="small" x="906" y="493">不改系统 Python</text>
+
+  <path class="arrow" d="M 390 345 C 410 345 418 345 430 345"/>
+  <path class="arrow" d="M 770 345 C 790 345 798 345 810 345"/>
+
+  <rect x="60" y="590" width="1080" height="42" rx="21" fill="#e9eee8"/>
+  <text class="small" x="90" y="618">结果：新环境先自检，缺什么补什么；登录过期时再引导重新登录。</text>
+</svg>

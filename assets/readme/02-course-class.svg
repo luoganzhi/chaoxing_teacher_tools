@@ -1,0 +1,60 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1200" height="680" viewBox="0 0 1200 680" role="img" aria-labelledby="title desc">
+  <title id="title">Course and class selection workflow</title>
+  <desc id="desc">A sanitized diagram showing teacher course listing, class selection, and homework task entry.</desc>
+  <defs>
+    <style>
+      .bg { fill: #f7f4ee; }
+      .panel { fill: #ffffff; stroke: #ded7ca; stroke-width: 2; }
+      .nav { fill: #34433a; }
+      .accent { fill: #2f7d5c; }
+      .gold { fill: #c48a32; }
+      .rust { fill: #b85c38; }
+      .text { font: 25px -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; fill: #28332d; }
+      .title { font: 36px -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; font-weight: 700; fill: #28332d; }
+      .small { font: 20px -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; fill: #687166; }
+      .code { font: 20px ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; fill: #27332d; }
+      .label { font: 18px -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; font-weight: 700; fill: #ffffff; }
+      .row { fill: #f5f7f3; }
+      .row2 { fill: #fff9ee; }
+      .line { stroke: #d8d0c2; stroke-width: 2; }
+    </style>
+  </defs>
+  <rect class="bg" width="1200" height="680"/>
+  <text class="title" x="60" y="70">课程、班级、作业入口由 agent 串起来</text>
+  <text class="small" x="60" y="108">示例数据均为脱敏占位，实际运行时只展示教师课程</text>
+
+  <rect class="panel" x="60" y="150" width="500" height="430" rx="16"/>
+  <rect class="nav" x="60" y="150" width="500" height="58" rx="16"/>
+  <text class="label" x="90" y="186">教师课程列表</text>
+  <text class="code" x="90" y="250">$ python3 chaoxing_portal_tool.py courses</text>
+  <rect class="row" x="90" y="284" width="440" height="60" rx="8"/>
+  <text class="text" x="116" y="322">1. 示例课程 A</text>
+  <text class="small" x="356" y="322">classes=3</text>
+  <rect class="row2" x="90" y="360" width="440" height="60" rx="8"/>
+  <text class="text" x="116" y="398">2. 示例课程 B</text>
+  <text class="small" x="356" y="398">classes=2</text>
+  <rect class="row" x="90" y="436" width="440" height="60" rx="8"/>
+  <text class="text" x="116" y="474">3. 示例课程 C</text>
+  <text class="small" x="356" y="474">classes=4</text>
+  <rect x="90" y="526" width="440" height="34" rx="17" fill="#e9eee8"/>
+  <text class="small" x="116" y="549">用户说“进第一个课程”即可继续</text>
+
+  <rect class="panel" x="640" y="150" width="500" height="430" rx="16"/>
+  <rect class="accent" x="640" y="150" width="500" height="58" rx="16"/>
+  <text class="label" x="670" y="186">班级与任务入口</text>
+  <text class="code" x="670" y="250">$ ... course-classes "示例课程 A"</text>
+  <rect class="row2" x="670" y="284" width="440" height="60" rx="8"/>
+  <text class="text" x="696" y="322">1. 2026 春季 1 班</text>
+  <text class="small" x="968" y="322">[用户]</text>
+  <rect class="row" x="670" y="360" width="440" height="60" rx="8"/>
+  <text class="text" x="696" y="398">2. 2026 春季 2 班</text>
+  <text class="small" x="968" y="398">42 人</text>
+  <text class="code" x="670" y="468">$ ... task-options "示例课程 A" 1</text>
+  <rect x="670" y="500" width="198" height="52" rx="12" class="gold"/>
+  <text class="label" x="720" y="533">作业界面</text>
+  <rect x="890" y="500" width="198" height="52" rx="12" class="rust"/>
+  <text class="label" x="940" y="533">考试隐藏</text>
+
+  <path d="M 565 365 C 602 365 608 365 633 365" fill="none" stroke="#2f7d5c" stroke-width="5"/>
+  <path d="M 625 354 L 642 365 L 625 376 Z" fill="#2f7d5c"/>
+</svg>

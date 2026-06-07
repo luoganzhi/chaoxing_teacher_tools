@@ -168,6 +168,13 @@ def ensure_api_dependencies() -> None:
         ) from exc
 
 
+def safe_find_spec(import_name: str):
+    try:
+        return importlib.util.find_spec(import_name), ""
+    except (ImportError, AttributeError, ValueError) as exc:
+        return None, str(exc)
+
+
 def api_dependency_report() -> list[dict[str, object]]:
     modules = [
         ("requests", "requests", "HTTP API requests", True),
@@ -181,8 +188,7 @@ def api_dependency_report() -> list[dict[str, object]]:
     ]
     report = []
     for module_name, import_name, purpose, required in modules:
-        spec = importlib.util.find_spec(import_name)
-        import_error = ""
+        spec, import_error = safe_find_spec(import_name)
         if spec is not None:
             try:
                 __import__(import_name)

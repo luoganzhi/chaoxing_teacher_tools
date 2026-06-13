@@ -36,9 +36,50 @@ MOOC2_BASE_URL = "https://mooc2-ans.chaoxing.com"
 TRANSFER_KEY = "u2oh6Vu^HWe4_AES"
 DEFAULT_GRADE_PLAN_DIR = ".chaoxing_grade_plans"
 DEFAULT_REVIEW_BUNDLE_DIR = ".chaoxing_review_bundles"
+DEFAULT_QUESTION_DRAFT_DIR = ".chaoxing_question_drafts"
 DEFAULT_LOCAL_DEPS_DIR = ".chaoxing_deps"
-# Exam automation is intentionally hidden until its workflow is finished.
-TASK_ORDER = ("homework",)
+QUESTION_TYPE_ALIASES = {
+    "single_choice": "single_choice",
+    "single": "single_choice",
+    "choice": "single_choice",
+    "单选": "single_choice",
+    "单选题": "single_choice",
+    "multiple_choice": "multiple_choice",
+    "multiple": "multiple_choice",
+    "multi": "multiple_choice",
+    "多选": "multiple_choice",
+    "多选题": "multiple_choice",
+    "true_false": "true_false",
+    "truefalse": "true_false",
+    "tf": "true_false",
+    "判断": "true_false",
+    "判断题": "true_false",
+    "short_answer": "short_answer",
+    "short": "short_answer",
+    "问答": "short_answer",
+    "问答题": "short_answer",
+    "简答": "short_answer",
+    "简答题": "short_answer",
+    "essay": "essay",
+    "论述": "essay",
+    "论述题": "essay",
+}
+QUESTION_TYPE_NAMES = {
+    "single_choice": "单选题",
+    "multiple_choice": "多选题",
+    "true_false": "判断题",
+    "short_answer": "简答题",
+    "essay": "论述题",
+}
+DEFAULT_QUESTION_SCORES = {
+    "single_choice": 2.0,
+    "multiple_choice": 3.0,
+    "true_false": 1.0,
+    "short_answer": 8.0,
+    "essay": 15.0,
+}
+# Online exam creation/publishing is hidden until those flows are verified.
+TASK_ORDER = ("homework", "exam")
 TASK_DEFINITIONS = {
     "exam": {
         "index": 1,
@@ -144,7 +185,7 @@ def run_browser(args: list[str], *, check: bool = True) -> subprocess.CompletedP
 
 
 def base_args(session_name: str, headed: bool) -> list[str]:
-    args = ["--session", session_name, "--session-name", session_name]
+    args = ["--session", session_name]
     if headed:
         args.append("--headed")
     return args
@@ -512,6 +553,59 @@ def prompt_credentials() -> tuple[str, str]:
     return username, password
 
 
+def apple_script_quote(value: str) -> str:
+    return '"' + value.replace("\\", "\\\\").replace('"', '\\"') + '"'
+
+
+def macos_dialog_text(prompt: str, title: str, hidden: bool = False) -> str:
+    command = [
+        "osascript",
+        "-e",
+        (
+            "text returned of (display dialog "
+            + apple_script_quote(prompt)
+            + " default answer \"\" "
+            + ("with hidden answer " if hidden else "")
+            + "with title "
+            + apple_script_quote(title)
+            + " buttons {\"Cancel\", \"OK\"} default button \"OK\")"
+        ),
+    ]
+    result = subprocess.run(command, text=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+    if result.returncode != 0:
+        raise ToolError("login prompt was canceled or unavailable")
+    return result.stdout.strip()
+
+
+def prompt_credentials_macos_dialog() -> tuple[str, str]:
+    username = macos_dialog_text("请输入超星账号/手机号", "Chaoxing Login")
+    if not username:
+        raise ToolError("username cannot be empty")
+
+    password = macos_dialog_text("请输入超星密码", "Chaoxing Login", hidden=True)
+    if not password:
+        raise ToolError("password cannot be empty")
+
+    return username, password
+
+
+def prompt_credentials_stdin_json() -> tuple[str, str]:
+    try:
+        payload = json.load(sys.stdin)
+    except Exception as exc:
+        raise ToolError("--stdin-json expects a JSON object on stdin") from exc
+    if not isinstance(payload, dict):
+        raise ToolError("--stdin-json expects a JSON object on stdin")
+
+    username = str(payload.get("username") or payload.get("phone") or payload.get("account") or "").strip()
+    password = str(payload.get("password") or "")
+    if not username:
+        raise ToolError("stdin JSON is missing username/phone/account")
+    if not password:
+        raise ToolError("stdin JSON is missing password")
+    return username, password
+
+
 def open_login_dialog(browser_args: list[str]) -> None:
     snapshot = run_browser(
         [*browser_args, "snapshot", "-i", "-u", "-d", "4"],
@@ -622,7 +716,11 @@ def api_login(args: argparse.Namespace) -> int:
 
     username = os.environ.get("CHAOXING_USERNAME", "").strip()
     password = os.environ.get("CHAOXING_PASSWORD", "")
-    if not username or args.prompt:
+    if getattr(args, "stdin_json", False):
+        username, password = prompt_credentials_stdin_json()
+    elif getattr(args, "macos_dialog", False):
+        username, password = prompt_credentials_macos_dialog()
+    elif not username or args.prompt:
         username, password = prompt_credentials()
     elif not password:
         password = getpass.getpass("Chaoxing password: ")
@@ -968,9 +1066,7 @@ def normalize_task_kind(task: str) -> str:
 
     task_kind = TASK_ALIASES.get(normalized)
     if not task_kind:
-        raise ToolError("task must be one of: homework, 作业")
-    if task_kind not in TASK_ORDER:
-        raise ToolError(f"task is currently disabled: {task_kind}")
+        raise ToolError("task must be one of: homework/作业, exam/考试")
     return task_kind
 
 
@@ -1550,6 +1646,10 @@ def default_review_bundle_dir() -> str:
     return os.path.join(os.path.dirname(os.path.abspath(__file__)), DEFAULT_REVIEW_BUNDLE_DIR)
 
 
+def default_question_draft_dir() -> str:
+    return os.path.join(os.path.dirname(os.path.abspath(__file__)), DEFAULT_QUESTION_DRAFT_DIR)
+
+
 def save_grade_plan(payload: dict[str, object], plan_dir: str) -> str:
     os.makedirs(plan_dir, exist_ok=True)
     work = payload.get("homework") if isinstance(payload.get("homework"), dict) else {}
@@ -1569,6 +1669,24 @@ def save_review_bundle(payload: dict[str, object], bundle_dir: str) -> str:
     work_id = str(work.get("work_id") or "work")
     filename = f"review_bundle_{time.strftime('%Y%m%d_%H%M%S')}_{work_id}.json"
     path = os.path.join(bundle_dir, filename)
+    with open(path, "w", encoding="utf-8") as file:
+        json.dump(payload, file, ensure_ascii=False, indent=2)
+        file.write("\n")
+    os.chmod(path, 0o600)
+    return path
+
+
+def save_question_draft(payload: dict[str, object], draft_dir: str, output: str = "") -> str:
+    if output:
+        path = os.path.abspath(output)
+        parent = os.path.dirname(path)
+        if parent:
+            os.makedirs(parent, exist_ok=True)
+    else:
+        os.makedirs(draft_dir, exist_ok=True)
+        title = str(payload.get("title") or "questions")
+        filename = f"question_draft_{time.strftime('%Y%m%d_%H%M%S')}_{safe_filename(title)}.json"
+        path = os.path.join(draft_dir, filename)
     with open(path, "w", encoding="utf-8") as file:
         json.dump(payload, file, ensure_ascii=False, indent=2)
         file.write("\n")
@@ -1697,6 +1815,549 @@ def extract_document_text(path: str, max_chars: int) -> str:
     except Exception as exc:
         return f"(failed to extract {os.path.basename(path)}: {exc})"
     return ""
+
+
+def normalize_question_types(value: str) -> list[str]:
+    if not value.strip():
+        raise ToolError("--types cannot be empty")
+    types = []
+    for raw_item in re.split(r"[,，/、\s]+", value.strip()):
+        if not raw_item:
+            continue
+        question_type = QUESTION_TYPE_ALIASES.get(raw_item.strip().lower())
+        if not question_type:
+            raise ToolError(f"unsupported question type: {raw_item}")
+        if question_type not in types:
+            types.append(question_type)
+    if not types:
+        raise ToolError("--types cannot be empty")
+    return types
+
+
+def parse_csvish_list(value: str) -> list[str]:
+    return [item.strip() for item in re.split(r"[,，;；、\n]+", value or "") if item.strip()]
+
+
+def clean_question_source_text(text: str, source_type: str) -> str:
+    if source_type in ("md", "markdown", "text", "txt", "stdin"):
+        text = re.sub(r"```[\s\S]*?```", " ", text)
+        text = re.sub(r"!\[[^\]]*\]\([^)]+\)", " ", text)
+        text = re.sub(r"\[([^\]]+)\]\([^)]+\)", r"\1", text)
+        text = re.sub(r"`([^`]+)`", r"\1", text)
+        cleaned_lines = []
+        for raw_line in text.splitlines():
+            line = raw_line.strip()
+            if not line:
+                cleaned_lines.append("")
+                continue
+            line = re.sub(r"^#{1,6}\s*", "", line)
+            line = re.sub(r"^[-*+]\s+", "", line)
+            line = re.sub(r"^\d+[.)、]\s+", "", line)
+            line = re.sub(r"^\|?[-: ]+\|[-|: ]+$", "", line)
+            line = line.strip()
+            if not line:
+                continue
+            if re.fullmatch(r"[A-Za-z0-9._/\- ]{1,40}", line):
+                continue
+            if len(line) <= 16 and not re.search(r"[。！？!?；;，,：:]", line):
+                continue
+            cleaned_lines.append(line)
+        text = "\n".join(cleaned_lines)
+    elif source_type in ("html", "htm"):
+        text = compact_text(text)
+    return compact_text(text)
+
+
+def looks_like_cookie_payload(payload: object) -> bool:
+    if not isinstance(payload, dict):
+        return False
+    cookies = payload.get("cookies")
+    if not isinstance(cookies, list) or not cookies:
+        return False
+    return any(
+        isinstance(cookie, dict) and {"name", "value", "domain"}.issubset(set(cookie.keys()))
+        for cookie in cookies
+    )
+
+
+def collect_json_text(value: object, parts: list[str], key_path: str = "") -> None:
+    sensitive_tokens = ("cookie", "password", "token", "secret", "authorization", "ticket")
+    interesting_keys = (
+        "title",
+        "name",
+        "chapter",
+        "content",
+        "text",
+        "summary",
+        "extracted_text",
+        "question",
+        "answer",
+        "analysis",
+        "description",
+        "knowledge",
+        "knowledge_point",
+    )
+    if any(token in key_path.lower() for token in sensitive_tokens):
+        return
+
+    if isinstance(value, dict):
+        for key, child in value.items():
+            child_path = f"{key_path}.{key}" if key_path else str(key)
+            collect_json_text(child, parts, child_path)
+        return
+
+    if isinstance(value, list):
+        for index, child in enumerate(value):
+            collect_json_text(child, parts, f"{key_path}[{index}]")
+        return
+
+    if not isinstance(value, (str, int, float)):
+        return
+
+    text = compact_text(str(value))
+    if not text:
+        return
+    key_name = key_path.rsplit(".", 1)[-1].lower()
+    key_name = re.sub(r"\[\d+\]$", "", key_name)
+    if key_name in interesting_keys or len(text) >= 20:
+        parts.append(text)
+
+
+def extract_json_source_text(path: str, max_chars: int) -> str:
+    with open(path, "r", encoding="utf-8") as file:
+        payload = json.load(file)
+    if looks_like_cookie_payload(payload):
+        raise ToolError("refusing to use a cookie file as question source")
+
+    parts: list[str] = []
+    if isinstance(payload, dict) and isinstance(payload.get("reviews"), list):
+        course = payload.get("course") if isinstance(payload.get("course"), dict) else {}
+        clazz = payload.get("selected_class") if isinstance(payload.get("selected_class"), dict) else {}
+        homework = payload.get("homework") if isinstance(payload.get("homework"), dict) else {}
+        for value in (
+            course.get("course_name"),
+            clazz.get("clazz_name"),
+            homework.get("title"),
+        ):
+            if value:
+                parts.append(str(value))
+    collect_json_text(payload, parts)
+    return "\n".join(dict.fromkeys(parts))[:max_chars]
+
+
+def load_question_source(path: str, max_chars: int) -> dict[str, object]:
+    if path == "-":
+        text = clean_question_source_text(sys.stdin.read(max_chars), "stdin")
+        return {
+            "path": "-",
+            "source_type": "stdin",
+            "chars": len(text),
+            "text": text,
+        }
+
+    if not os.path.exists(path):
+        raise ToolError(f"source file not found: {path}")
+    if os.path.isdir(path):
+        raise ToolError(f"source path is a directory, not a file: {path}")
+
+    ext = os.path.splitext(path)[1].lower()
+    if re.search(r"cookie", os.path.basename(path), flags=re.I):
+        raise ToolError("refusing to use a cookie file as question source")
+
+    if ext == ".json":
+        text = extract_json_source_text(path, max_chars)
+    elif ext in (".docx", ".doc", ".pdf"):
+        text = extract_document_text(path, max_chars)
+    else:
+        with open(path, "r", encoding="utf-8", errors="ignore") as file:
+            raw = file.read(max_chars)
+        text = raw.strip()
+
+    source_type = ext.lstrip(".") or "text"
+    text = clean_question_source_text(text, source_type)
+
+    return {
+        "path": os.path.abspath(path),
+        "source_type": source_type,
+        "chars": len(text),
+        "text": text,
+    }
+
+
+def split_source_units(text: str) -> list[str]:
+    text = compact_text(text)
+    paragraphs = [part.strip() for part in re.split(r"\n{2,}", text) if part.strip()]
+    units: list[str] = []
+    for paragraph in paragraphs or [text]:
+        chunks = re.split(r"(?<=[。！？!?；;：:])\s*", paragraph)
+        buffer = ""
+        for chunk in chunks:
+            chunk = compact_text(chunk)
+            if not chunk:
+                continue
+            if len(chunk) < 18 and buffer:
+                buffer = f"{buffer}{chunk}"
+                continue
+            if buffer:
+                units.append(buffer)
+            buffer = chunk
+        if buffer:
+            units.append(buffer)
+
+    cleaned = []
+    seen = set()
+    for unit in units:
+        unit = re.sub(r"\s+", " ", unit).strip()
+        if len(unit) < 12:
+            continue
+        if len(unit) > 260:
+            pieces = re.split(r"(?<=[，,、])", unit)
+            unit = "".join(pieces[:4]).strip() or unit[:260]
+        key = unit[:120]
+        if key in seen:
+            continue
+        seen.add(key)
+        cleaned.append(unit)
+    return cleaned
+
+
+def source_unit_score(unit: str) -> int:
+    score = 0
+    if 28 <= len(unit) <= 180:
+        score += 4
+    if re.search(r"(是|指|包括|包含|分为|采用|通过|用于|能够|可以|需要|核心|关键|因此|所以)", unit):
+        score += 3
+    if re.search(r"[\u4e00-\u9fff]", unit):
+        score += 2
+    if re.search(r"\d|%|[A-Za-z]{2,}", unit):
+        score += 1
+    return score
+
+
+def select_question_units(text: str, count: int) -> list[str]:
+    units = split_source_units(text)
+    if not units:
+        raise ToolError("source content is empty after text extraction")
+    ranked = sorted(enumerate(units), key=lambda item: (-source_unit_score(item[1]), item[0]))
+    selected = [unit for _index, unit in ranked[: max(count * 2, count)]]
+    if len(selected) < count:
+        selected = units
+    return selected
+
+
+def extract_question_topic(unit: str) -> str:
+    text = compact_text(unit)
+    text = re.sub(r"^[\d一二三四五六七八九十]+[、.．]\s*", "", text)
+    for pattern in (
+        r"(.{2,28}?)(?:是|指|包括|包含|分为|采用|通过|用于|能够|可以|需要|属于)",
+        r"(?:关于|围绕|针对)(.{2,24}?)(?:，|,|。|；|;)",
+    ):
+        match = re.search(pattern, text)
+        if match:
+            topic = re.sub(r"^(因此|所以|其中|同时|此外|本节|本文|材料中)", "", match.group(1)).strip()
+            topic = topic.strip(" ：:，,。；;“”\"'（）()[]【】")
+            topic = re.sub(r"(不|未|没有)$", "", topic).strip()
+            if 2 <= len(topic) <= 24:
+                return topic
+    words = re.findall(r"[A-Za-z][A-Za-z0-9_\-]{2,}|[\u4e00-\u9fff]{2,8}", text)
+    stopwords = {"因此", "所以", "可以", "需要", "包括", "通过", "进行", "主要", "能够", "材料"}
+    for word in words:
+        if word not in stopwords:
+            return word[:18]
+    return text[:18]
+
+
+def short_option_text(value: str, limit: int = 96) -> str:
+    return short_text(value, limit).rstrip("。；;")
+
+
+def choose_distractors(units: list[str], correct: str, topic: str, needed: int) -> list[str]:
+    distractors = []
+    topic = topic.strip()
+    for unit in units:
+        if unit == correct:
+            continue
+        if topic and topic in unit:
+            continue
+        option = short_option_text(unit)
+        if option and option not in distractors:
+            distractors.append(option)
+        if len(distractors) >= needed:
+            break
+    fillers = [
+        "只关注材料未展开的外部背景",
+        "忽略材料中的限定条件",
+        "把局部现象直接等同于整体结论",
+    ]
+    for filler in fillers:
+        if len(distractors) >= needed:
+            break
+        distractors.append(filler)
+    return distractors[:needed]
+
+
+def option_rows(texts: list[str]) -> list[dict[str, str]]:
+    labels = ["A", "B", "C", "D", "E", "F"]
+    return [{"label": labels[index], "text": text} for index, text in enumerate(texts)]
+
+
+def rotate_options(correct: str, distractors: list[str], index: int) -> tuple[list[dict[str, str]], str]:
+    texts = [short_option_text(correct), *distractors[:3]]
+    offset = index % len(texts)
+    rotated = texts[offset:] + texts[:offset]
+    options = option_rows(rotated)
+    answer = next(option["label"] for option in options if option["text"] == short_option_text(correct))
+    return options, answer
+
+
+def mixed_difficulty(question_type: str, index: int) -> str:
+    if question_type in ("true_false", "single_choice"):
+        return "easy" if index % 3 else "medium"
+    if question_type == "essay":
+        return "hard"
+    return "medium"
+
+
+def build_question(
+    index: int,
+    question_type: str,
+    unit: str,
+    units: list[str],
+    difficulty: str,
+) -> dict[str, object]:
+    topic = extract_question_topic(unit)
+    difficulty_value = mixed_difficulty(question_type, index) if difficulty == "mixed" else difficulty
+    score = DEFAULT_QUESTION_SCORES[question_type]
+    base = {
+        "id": f"Q{index:03d}",
+        "type": question_type,
+        "type_name": QUESTION_TYPE_NAMES[question_type],
+        "difficulty": difficulty_value,
+        "score": score,
+        "source_evidence": unit,
+        "draft_status": "needs_teacher_review",
+    }
+
+    if question_type == "single_choice":
+        options, answer = rotate_options(unit, choose_distractors(units, unit, topic, 3), index)
+        return {
+            **base,
+            "stem": f"根据材料，关于“{topic}”，下列哪项表述最符合原文？",
+            "options": options,
+            "answer": answer,
+            "analysis": f"原文依据：{unit}",
+        }
+
+    if question_type == "multiple_choice":
+        related = [unit]
+        for candidate in units:
+            if candidate != unit and len(related) < 2 and topic and topic in candidate:
+                related.append(candidate)
+        for candidate in units:
+            if candidate != unit and candidate not in related and len(related) < 2:
+                related.append(candidate)
+        distractors = choose_distractors(units, unit, topic, 4 - len(related))
+        texts = [short_option_text(item) for item in related] + distractors
+        options = option_rows(texts[:4])
+        answers = [option["label"] for option in options if option["text"] in {short_option_text(item) for item in related}]
+        return {
+            **base,
+            "stem": f"根据材料，下列哪些表述与“{topic}”直接相关？",
+            "options": options,
+            "answer": answers,
+            "analysis": "正确选项均可在材料对应语句中找到依据。",
+        }
+
+    if question_type == "true_false":
+        if index % 2:
+            statement = short_option_text(unit, 140)
+            answer = "正确"
+            analysis = f"该表述来自材料：{unit}"
+        else:
+            distractor = choose_distractors(units, unit, topic, 1)[0]
+            statement = f"材料认为“{topic}”的核心内容是：{distractor}。"
+            answer = "错误"
+            analysis = f"该表述混淆了材料内容。关于“{topic}”的依据是：{unit}"
+        return {
+            **base,
+            "stem": statement,
+            "answer": answer,
+            "analysis": analysis,
+        }
+
+    if question_type == "short_answer":
+        return {
+            **base,
+            "stem": f"简述材料中“{topic}”的核心内容。",
+            "reference_answer": unit,
+            "answer": unit,
+            "analysis": f"答题要点应覆盖材料中的关键信息：{unit}",
+        }
+
+    if question_type == "essay":
+        unit_index = units.index(unit) if unit in units else 0
+        evidence_units = units[unit_index : unit_index + 3] or [unit]
+        return {
+            **base,
+            "stem": f"结合材料，分析“{topic}”的作用、实现思路或教学启示。",
+            "reference_answer": "\n".join(evidence_units),
+            "scoring_points": [
+                "能准确概括材料中的核心概念或过程。",
+                "能结合材料说明关键依据，而不是只给泛泛结论。",
+                "能展开分析作用、限制、应用场景或教学启示。",
+            ],
+            "analysis": "论述题答案应围绕材料证据展开，可按课堂要求补充案例。",
+        }
+
+    raise ToolError(f"unsupported question type: {question_type}")
+
+
+def build_question_draft_payload(args: argparse.Namespace) -> dict[str, object]:
+    if args.count <= 0:
+        raise ToolError("--count must be greater than 0")
+    if args.max_source_chars <= 0:
+        raise ToolError("--max-source-chars must be greater than 0")
+
+    question_types = normalize_question_types(args.types)
+    per_source_limit = max(1000, args.max_source_chars // max(len(args.sources), 1))
+    sources = [load_question_source(path, per_source_limit) for path in args.sources]
+    combined_text = compact_text("\n\n".join(str(source.get("text") or "") for source in sources))
+    if not combined_text:
+        raise ToolError("no usable source text found")
+    combined_text = combined_text[: args.max_source_chars]
+
+    units = select_question_units(combined_text, args.count)
+    questions = []
+    for index in range(1, args.count + 1):
+        question_type = question_types[(index - 1) % len(question_types)]
+        unit = units[(index - 1) % len(units)]
+        questions.append(build_question(index, question_type, unit, units, args.difficulty))
+
+    title = args.title.strip() or "内容出题草稿"
+    return {
+        "created_at": time.strftime("%Y-%m-%dT%H:%M:%S%z"),
+        "title": title,
+        "metadata": {
+            "course": args.course,
+            "chapter": args.chapter,
+            "knowledge_points": parse_csvish_list(args.knowledge_points),
+            "question_types": question_types,
+            "difficulty": args.difficulty,
+            "requested_count": args.count,
+        },
+        "source_files": [
+            {
+                "path": source.get("path"),
+                "source_type": source.get("source_type"),
+                "chars": source.get("chars"),
+                "text_excerpt": short_text(source.get("text"), 500),
+            }
+            for source in sources
+        ],
+        "source_excerpt": combined_text[:3000],
+        "generation_policy": {
+            "mode": "offline_draft",
+            "published_to_chaoxing": False,
+            "teacher_review_required": True,
+            "note": "题目由本地材料抽取和模板生成，发布或导入前需要教师审题、改写干扰项并确认答案。",
+        },
+        "questions": questions,
+    }
+
+
+def render_question_markdown(payload: dict[str, object]) -> str:
+    lines = [f"# {payload.get('title') or '内容出题草稿'}", ""]
+    metadata = payload.get("metadata") if isinstance(payload.get("metadata"), dict) else {}
+    if metadata.get("course"):
+        lines.append(f"- 课程：{metadata.get('course')}")
+    if metadata.get("chapter"):
+        lines.append(f"- 章节：{metadata.get('chapter')}")
+    if metadata.get("knowledge_points"):
+        lines.append("- 知识点：" + "、".join(str(item) for item in metadata.get("knowledge_points", [])))
+    lines.append("- 状态：草稿，发布前需要教师复核")
+    lines.append("")
+
+    questions = payload.get("questions") if isinstance(payload.get("questions"), list) else []
+    for index, question in enumerate(questions, 1):
+        if not isinstance(question, dict):
+            continue
+        lines.append(f"## {index}. [{question.get('type_name')}] {question.get('stem')}")
+        options = question.get("options")
+        if isinstance(options, list):
+            for option in options:
+                if isinstance(option, dict):
+                    lines.append(f"- {option.get('label')}. {option.get('text')}")
+        answer = question.get("answer")
+        if isinstance(answer, list):
+            answer_text = "、".join(str(item) for item in answer)
+        else:
+            answer_text = str(answer or question.get("reference_answer") or "")
+        if answer_text:
+            lines.append(f"答案：{answer_text}")
+        if question.get("analysis"):
+            lines.append(f"解析：{question.get('analysis')}")
+        if question.get("source_evidence"):
+            lines.append(f"依据：{question.get('source_evidence')}")
+        lines.append("")
+    return "\n".join(lines).rstrip() + "\n"
+
+
+def print_question_draft_summary(payload: dict[str, object], draft_file: str) -> None:
+    questions = payload.get("questions") if isinstance(payload.get("questions"), list) else []
+    print(f"draft_file: {draft_file}")
+    print(f"title: {payload.get('title')}")
+    print(f"questions: {len(questions)}")
+    print("draft_status: not published; teacher review required before importing to Chaoxing")
+    for question in questions:
+        if not isinstance(question, dict):
+            continue
+        answer = question.get("answer")
+        if isinstance(answer, list):
+            answer_text = ",".join(str(item) for item in answer)
+        else:
+            answer_text = str(answer or "")
+        answer_suffix = f" answer={answer_text}" if answer_text else ""
+        print(
+            f"  {question.get('id')}. [{question.get('type_name')}] "
+            f"{short_text(question.get('stem'), 90)}{answer_suffix}"
+        )
+
+
+def command_exam_question_draft(args: argparse.Namespace) -> int:
+    payload = build_question_draft_payload(args)
+    draft_file = save_question_draft(payload, args.draft_dir, args.output)
+    markdown_file = ""
+    markdown = ""
+    if args.markdown_output or args.format == "markdown":
+        markdown = render_question_markdown(payload)
+    if args.markdown_output:
+        markdown_file = os.path.abspath(args.markdown_output)
+        parent = os.path.dirname(markdown_file)
+        if parent:
+            os.makedirs(parent, exist_ok=True)
+        with open(markdown_file, "w", encoding="utf-8") as file:
+            file.write(markdown)
+        os.chmod(markdown_file, 0o600)
+
+    if args.format == "json":
+        print(
+            json.dumps(
+                {
+                    "draft_file": draft_file,
+                    "markdown_file": markdown_file,
+                    **payload,
+                },
+                ensure_ascii=False,
+                indent=2,
+            )
+        )
+    elif args.format == "markdown":
+        print(markdown.rstrip())
+    else:
+        print_question_draft_summary(payload, draft_file)
+        if markdown_file:
+            print(f"markdown_file: {markdown_file}")
+    return 0
 
 
 def is_answer_image_url(url: str) -> bool:
@@ -2941,6 +3602,16 @@ def build_parser() -> argparse.ArgumentParser:
     login = subparsers.add_parser("login", help="login through Chaoxing HTTP APIs and save cookies")
     add_cookie_file_argument(login)
     login.add_argument("--prompt", action="store_true", help="always prompt, ignoring env vars")
+    login.add_argument(
+        "--macos-dialog",
+        action="store_true",
+        help="prompt for username/password using macOS secure dialogs instead of stdin",
+    )
+    login.add_argument(
+        "--stdin-json",
+        action="store_true",
+        help="read username/password JSON from stdin; only use when the user explicitly accepts chat/input exposure",
+    )
     login.add_argument("--fid", default="-1", help="Chaoxing school/org fid, default: -1")
     login.add_argument(
         "--timeout",
@@ -2999,6 +3670,48 @@ def build_parser() -> argparse.ArgumentParser:
     api_status_cmd.add_argument("--check-url", default=AUTH_CHECK_URL, help=f"default: {AUTH_CHECK_URL}")
     api_status_cmd.add_argument("--timeout", type=float, default=20.0, help="request timeout in seconds")
     api_status_cmd.set_defaults(func=api_status)
+
+    exam_question_draft = subparsers.add_parser(
+        "exam-question-draft",
+        aliases=["question-draft", "draft-exam-questions"],
+        help="generate an offline exam-question draft from course content files",
+    )
+    exam_question_draft.add_argument("--format", choices=("table", "json", "markdown"), default="table")
+    exam_question_draft.add_argument("--title", default="", help="exam/question draft title")
+    exam_question_draft.add_argument("--course", default="", help="course name for metadata")
+    exam_question_draft.add_argument("--chapter", default="", help="chapter/section name for metadata")
+    exam_question_draft.add_argument("--knowledge-points", default="", help="comma-separated knowledge points")
+    exam_question_draft.add_argument("--count", type=int, default=10, help="number of questions to draft")
+    exam_question_draft.add_argument(
+        "--types",
+        default="single_choice,true_false,short_answer",
+        help="question types, for example: single_choice,multiple_choice,true_false,short_answer,essay",
+    )
+    exam_question_draft.add_argument(
+        "--difficulty",
+        choices=("easy", "medium", "hard", "mixed"),
+        default="mixed",
+        help="question difficulty metadata, default: mixed",
+    )
+    exam_question_draft.add_argument(
+        "--max-source-chars",
+        type=int,
+        default=24000,
+        help="max characters to read from all source files",
+    )
+    exam_question_draft.add_argument(
+        "--draft-dir",
+        default=default_question_draft_dir(),
+        help=f"directory for exam question drafts, default: {default_question_draft_dir()}",
+    )
+    exam_question_draft.add_argument("--output", default="", help="write JSON draft to this path")
+    exam_question_draft.add_argument("--markdown-output", default="", help="also write a Markdown review copy")
+    exam_question_draft.add_argument(
+        "sources",
+        nargs="+",
+        help="source files: txt/md/html/docx/pdf/json, or '-' for stdin",
+    )
+    exam_question_draft.set_defaults(func=command_exam_question_draft)
 
     courses = subparsers.add_parser("courses", help="list teaching courses only")
     add_cookie_file_argument(courses)
@@ -3070,7 +3783,7 @@ def build_parser() -> argparse.ArgumentParser:
     course_task.add_argument("--headed", action="store_true", help="show the browser window when --open is used")
     course_task.add_argument("course", help="teaching course name, partial name, or course_id")
     course_task.add_argument("clazz", help="class index, class name, partial class name, or clazz_id")
-    course_task.add_argument("task", help="homework/作业; exam is currently disabled")
+    course_task.add_argument("task", help="homework/作业 or exam/考试; exam creation/publishing is not automated")
     course_task.set_defaults(func=command_course_task)
 
     homework_ungraded = subparsers.add_parser(

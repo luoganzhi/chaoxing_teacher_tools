@@ -10,10 +10,12 @@ env/
 
 .chaoxing_cookies.json
 .chaoxing_grade_plans/
+.chaoxing_question_drafts/
 .chaoxing_review_bundles/
 .skill_build/
 
 grade_plan_*.json
+question_draft_*.json
 review_bundle_*.json
 review_scores_*.json
 assets_*/

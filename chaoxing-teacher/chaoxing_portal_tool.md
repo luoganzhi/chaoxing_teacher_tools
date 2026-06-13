@@ -50,7 +50,8 @@ To verify saved cookies too:
 python3 chaoxing_portal_tool.py doctor --check-login
 ```
 
-After login, list teacher courses:
+After login, immediately list teacher courses and enter the course-selection
+flow instead of stopping at the login success message:
 
 ```bash
 python3 chaoxing_portal_tool.py courses
@@ -70,6 +71,27 @@ The command prompts for account and password, calls Chaoxing/Fanya's
 
 ```text
 .chaoxing_cookies.json
+```
+
+When the agent UI does not expose a usable stdin prompt, use macOS secure input
+dialogs while still logging in through the HTTP API:
+
+```bash
+python3 chaoxing_portal_tool.py login --macos-dialog
+```
+
+As an explicit fallback, `--stdin-json` reads credentials from stdin. Use this
+only after the user accepts that the password may enter the chat or caller
+context. The command does not print the password.
+
+```bash
+python3 chaoxing_portal_tool.py login --stdin-json
+```
+
+stdin payload:
+
+```json
+{"username":"...", "password":"..."}
 ```
 
 You can also provide credentials through environment variables:
@@ -98,6 +120,42 @@ Before opening the portal, this injects the saved API cookies into the
 `agent-browser` session. If the cookies are missing or expired, it prompts for
 account and password first.
 
+## Exam question drafting
+
+Generate a local exam-question draft from course content files. This does not
+create, import, or publish an online Chaoxing exam.
+
+```bash
+python3 chaoxing_portal_tool.py exam-question-draft lecture.md \
+  --title "第 3 章测试题" \
+  --course 人工智能原理 \
+  --chapter "搜索算法" \
+  --knowledge-points "状态空间,A*算法,启发式函数" \
+  --count 12 \
+  --types single_choice,multiple_choice,true_false,short_answer \
+  --markdown-output exam_questions_review.md
+```
+
+Supported source files:
+
+- `.txt`, `.md`, `.html`
+- `.docx`, `.pdf` when the optional extraction packages are available
+- `.json`, including review/content bundles, but cookie files are refused
+- `-` for stdin
+
+Useful type names:
+
+- `single_choice` / `单选题`
+- `multiple_choice` / `多选题`
+- `true_false` / `判断题`
+- `short_answer` / `简答题`
+- `essay` / `论述题`
+
+The JSON draft is saved under `.chaoxing_question_drafts/` by default. Add
+`--output path.json` to choose a specific JSON path, or `--format markdown` to
+print a Markdown review copy. All generated questions are marked as drafts and
+should be reviewed by the teacher before any platform import.
+
 ## Teaching courses
 
 List only courses taught by the logged-in user:
@@ -105,6 +163,37 @@ List only courses taught by the logged-in user:
 ```bash
 python3 chaoxing_portal_tool.py courses
 ```
+
+Infer the task from the user's original request. If they said "使用超星批改作业",
+"批改作业", or "给分", keep the intended task as 批改作业. If they said
+"使用超星新建考试", "新建考试", "考试出题", or "生成试题", keep the intended task
+as 新建考试.
+
+After the user selects a course, use the stored task directly. Ask for the next
+task before listing classes only when the original request did not make it
+clear:
+
+1. 批改作业
+2. 新建考试
+
+For 批改作业, show classes for the selected teaching course:
+
+```bash
+python3 chaoxing_portal_tool.py course-classes 人工智能原理
+```
+
+For 新建考试, open the online exam page first. Chaoxing's exam URL still needs a
+class context, so use the first clearly marked `[用户]` class when available, or
+ask the user to choose a class if no user class is known.
+
+```bash
+python3 chaoxing_portal_tool.py course-task 人工智能原理 1 exam --open --headed
+```
+
+After opening the page, inspect it with `agent-browser snapshot -i -u -d 5` and
+confirm that the "新建考试" button is visible. Do not click the button until the
+user explicitly asks to proceed. Use `exam-question-draft` later when preparing
+question content.
 
 Show classes for a selected teaching course:
 
@@ -115,15 +204,18 @@ python3 chaoxing_portal_tool.py course-classes 人工智能原理
 The class list auto-detects the current account name and prioritizes classes
 whose names contain that user name, marking them with `[用户]`.
 
-This is the non-interactive flow intended for LLM use: the model lists teaching
-courses in chat, the user says which course to enter, and the model calls
-`course-classes` to show the class list.
+This is the non-interactive homework flow intended for LLM use: the model
+preserves the user's intended task, lists teaching courses in chat, and after
+the user picks a course either calls `course-classes` directly for 批改作业 or
+opens the exam page for 新建考试. It asks whether to 批改作业 or 新建考试 only when
+the original request did not say.
 
 ## Selected class tasks
 
 After the user selects a class, show the task choices for that same class.
-Exam is currently hidden until that workflow is finished, so only homework is
-shown.
+Exam and homework entries can be shown. Opening the exam page is allowed; exam
+creation/publishing actions still require explicit user confirmation and a
+separate implemented flow.
 
 ```bash
 python3 chaoxing_portal_tool.py task-options 人工智能原理 142468056

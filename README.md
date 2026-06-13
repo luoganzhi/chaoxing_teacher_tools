@@ -1,6 +1,6 @@
 # Chaoxing Teacher Skill
 
-超星/泛雅教师端 agent skill，用于教师课程查询、班级选择、作业内容提取、辅助评分、提交前确认和提交后验证。
+超星/泛雅教师端 agent skill，用于教师课程查询、班级选择、考试题草稿生成、作业内容提取、辅助评分、提交前确认和提交后验证。
 
 ## Install
 
@@ -28,7 +28,25 @@ https://github.com/luoganzhi/chaoxing_teacher_tools/tree/main/chaoxing-teacher
 帮我批改超星作业
 ```
 
-agent 会按 skill 说明自动运行环境检查、依赖安装、登录检查和作业批改流程。
+也可以说：
+
+```text
+根据这份课件内容生成超星考试题
+```
+
+也可以直接说：
+
+```text
+使用超星新建考试
+```
+
+或：
+
+```text
+使用超星批改作业
+```
+
+agent 会按 skill 说明自动运行环境检查、依赖安装、登录检查，并根据一开始说的任务直接进入考试出题草稿或作业批改流程。
 
 ## Workflow Preview
 
@@ -44,7 +62,7 @@ agent 首次使用时会先运行 `doctor`，检查 Python、依赖、本地 coo
 
 ![选择教师课程和班级](assets/readme/02-course-class.svg)
 
-登录后，agent 会先列出教师课程，再根据用户选择进入课程班级。班级列表会优先标记与当前用户相关的班级，任务入口当前只显示作业，考试功能保持隐藏。
+登录后，agent 会先列出教师课程。如果一开始已经说了“使用超星新建考试”或“使用超星批改作业”，用户选定课程后会直接进入对应流程；只有任务不明确时才询问是“批改作业”还是“新建考试”。选择批改作业时才继续列出班级；选择新建考试时会进入考试页面并确认“新建考试”按钮。线上考试创建/发布动作仍需要用户明确确认。
 
 ### 3. 提取作业内容给 agent 参考
 
@@ -80,13 +98,18 @@ python3 chaoxing_portal_tool.py doctor
 python3 chaoxing_portal_tool.py setup
 python3 chaoxing_portal_tool.py doctor --check-login
 python3 chaoxing_portal_tool.py login
+python3 chaoxing_portal_tool.py courses
 ```
 
 `setup` 会把依赖安装到本地 `.chaoxing_deps/cpythonX.Y/`，不修改系统 Python。
+登录或刷新 cookie 成功后，agent 会直接列出教师课程，进入课程选择，不停在“登录成功”。
 
 ## Capabilities
 
 - 只列出教师课程和班级
+- 进入考试页面并定位“新建考试”按钮
+- 根据讲义、Markdown、DOCX、PDF、JSON 内容生成本地考试题草稿
+- 支持单选、多选、判断、简答、论述题草稿和答案解析
 - 查找待批改作业
 - 提取学生答案文本
 - 下载答案图片和附件
@@ -95,13 +118,14 @@ python3 chaoxing_portal_tool.py login
 - 用户确认后提交分数
 - 提交后重新验证分数是否写入
 
-考试功能当前隐藏/禁用。
+线上考试创建、导入、发布不自动执行；进入考试页面和定位“新建考试”按钮可用，本地考试题草稿生成也可用，发布前需要教师审题。
 
 ## Safety
 
 - 不打印密码或 cookie
 - 不提交 `.chaoxing_cookies.json`
 - 不提交 `.chaoxing_grade_plans/`
+- 不提交 `.chaoxing_question_drafts/`
 - 不提交 `.chaoxing_review_bundles/`
 - 不公开学生作业附件、图片和成绩文件
 - 没有用户明确确认，不执行带 `--commit` 的提交命令
